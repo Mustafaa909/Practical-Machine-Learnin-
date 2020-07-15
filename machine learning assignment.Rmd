@@ -1,0 +1,148 @@
+---
+title: "Quantifying how well participants will do against barnbell lifting activity"
+author: "by Mustafa Houd"
+date: "7/14/2020"
+output: html_document
+---
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har. The goal of this project is to predict the manner in which they did the execise (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+
+The training data for this project are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv]
+
+The test data are available here:
+
+[https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv]
+
+## Goal Of this Project:
+
+1. Predicting the manner in which the participants did the exercise. Refer to the “classe” variable in the training set. All other variables can be used as predictor.  
+
+2.Show how the model was built, performed cross validation, and expectation of the sample error and reasons of choices made.
+
+3.Use the prediction model to predict 20 different test cases.  
+
+## Data Preprocessing:  
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(knitr)
+library(randomForest)
+library(corrplot)
+set.seed(888) # For research reproducibility purpose
+```
+```{r, echo=TRUE}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists(trainFile)) {
+  download.file(trainUrl, destfile=trainFile)
+}
+if (!file.exists(testFile)) {
+  download.file(testUrl, destfile=testFile)
+}
+```
+
+### Read the data:
+
+
+
+```{r cars}
+trainRaw <- read.csv("./data/pml-training.csv",header=T,sep=",",na.strings=c("NA",""))
+testRaw <- read.csv("./data/pml-testing.csv",header=T,sep=",",na.strings=c("NA",""))
+dim(trainRaw); dim(testRaw)
+```
+
+The training data set contains 19622 observations and 160 variables, while the testing data set contains 20 observations and 160 variables. The “classe” variable in the training set is the outcome to predict.  
+
+### Data Sets Partitioning Definitions  
+The data partitions of training and validating data sets are created as below:
+
+```{r pressure, echo=TRUE}
+trainRaw <- trainRaw[,-1] # Remove the first column that represents a ID Row
+inTrain = createDataPartition(trainRaw$classe, p=0.60, list=F)
+training = trainRaw[inTrain,]
+validating = trainRaw[-inTrain,]
+```
+
+### Data Cleaning  
+Since a random forest model is chosen and the data set must first be checked on possibility of columns without data.
+
+The decision is made whereby all the columns that having less than 60% of data filled are removed.  
+
+```{r, echo=TRUE}
+sum((colSums(!is.na(training[,-ncol(training)])) < 0.6*nrow(training))) # Number of columns with less than 60% of data
+```
+
+Next, the criteria to remove columns that do not satisfy is applied before applying to the model.  
+  
+```{r, echo=TRUE}
+Keep <- c((colSums(!is.na(training[,-ncol(training)])) >= 0.6*nrow(training)))
+training <-  training[,Keep]
+validating <- validating[,Keep]
+```
+
+## Modeling:  
+
+In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the execution. Therefore, the training of the model (Random Forest) is proceeded using the training data set.  
+```{r, echo=TRUE}
+training$classe <- as.character(training$classe)
+training$classe <- as.factor(training$classe)
+model <- randomForest(classe~.,data=training)
+model
+```
+
+## Model Evaluation:  
+
+
+
+Next, the model results is evaluated through the confusion Matrix.  
+
+
+The accurancy for the validating data set is calculated with the following formula:  
+
+```{r, echo=TRUE}
+acrcy<-c(as.numeric(predict(model,newdata=validating[,-ncol(validating)])==validating$classe))
+acrcy<-sum(acrcy)*100/nrow(validating)
+```
+
+Model Accuracy as tested over Validation set = 99.8725465% The out-of-sample error is 0.13%, which is pretty low.  
+
+## Model Test:  
+For the model testing, the new values are predicted using the testing dataset provided which was loaded earlier. Data cleaning was first performed and all columns of Testing data set are coerced for the same class of previous data set.
+
+
+```{r, echo=TRUE}
+testRaw <- testRaw[,-1] # Remove the first column that represents a ID Row
+testRaw <- testRaw[ , Keep] # Keep the same columns of testing dataset
+testRaw <- testRaw[,-ncol(testRaw)] # Remove the problem ID
+```
+
+### Transformations and Coercing of Testing Dataset
+
+```{r, echo=TRUE}
+# Coerce testing dataset to same class and structure of training dataset 
+testing <- rbind(training[100, -59] , testRaw) 
+
+# Apply the ID Row to row.names and 100 for dummy row from testing dataset 
+row.names(testing) <- c(100, 1:20)
+```
+
+## Prediction with the Testing Dataset
+
+```{r, echo=TRUE}
+predictions <- predict(model,newdata=testing[-1,])
+predictions
+```
+
+
+### _Hope You enjoyed it_
